@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#if UNITY_EDITOR
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
 using UnityEditor;
@@ -309,3 +310,4 @@ class SketchfabImporter : EditorWindow
 		GUILayout.EndHorizontal();
 	}
 }
+#endif
