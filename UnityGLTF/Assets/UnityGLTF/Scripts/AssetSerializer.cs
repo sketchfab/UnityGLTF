@@ -12,6 +12,7 @@ public class AssetManager
 	protected string _importMeshesDirectory;
 	protected string _importMaterialsDirectory;
 	protected string _importTexturesDirectory;
+	protected string _importAnimationDirectory;
 	public List<string> _generatedFiles;
 
 	// Import data
@@ -37,6 +38,9 @@ public class AssetManager
 
 		_importMaterialsDirectory = Path.Combine(_importDirectory, "materials");
 		Directory.CreateDirectory(_importMaterialsDirectory);
+
+		_importAnimationDirectory = Path.Combine(_importDirectory, "animations");
+		Directory.CreateDirectory(_importAnimationDirectory);
 
 		_createdGameObjects = new List<GameObject>();
 		_parsedMeshData = new List<List<KeyValuePair<Mesh, Material>>>();
@@ -84,6 +88,7 @@ public class AssetManager
 		GLTFUtils.removeEmptyDirectory(_importMeshesDirectory);
 		GLTFUtils.removeEmptyDirectory(_importTexturesDirectory);
 		GLTFUtils.removeEmptyDirectory(_importMaterialsDirectory);
+		GLTFUtils.removeEmptyDirectory(_importAnimationDirectory);
 		_createdGameObjects.Clear();
 
 		AssetDatabase.Refresh(); // also triggers Resources.UnloadUnusedAssets()
@@ -246,6 +251,13 @@ public class AssetManager
 
 		// Reload as asset
 		return (Material)AssetDatabase.LoadAssetAtPath(materialProjectPath, typeof(Material));
+	}
+
+	public void saveAnimationClip(AnimationClip clip)
+	{
+		string path = GLTFUtils.getPathProjectFromAbsolute(_importAnimationDirectory);
+		AssetDatabase.CreateAsset(clip, path + "/" + clip.name + ".anim");
+		//AssetDatabase.SaveAssets();
 	}
 
 	public void savePrefab(GameObject sceneObject, string _importDirectory)

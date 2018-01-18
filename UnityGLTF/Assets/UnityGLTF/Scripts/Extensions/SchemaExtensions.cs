@@ -106,19 +106,19 @@ textureObj.wrapMode == TextureWrapMode.Clamp && root.Samplers[i].WrapS == GLTFSe
 			{
 				case 0:
 				{
-					return new Vector4(mat.M11, mat.M21, mat.M31, mat.M41);
+					return new Vector4(mat.M11, mat.M12, mat.M13, mat.M14);
 				}
 				case 1:
 				{
-					return new Vector4(mat.M12, mat.M22, mat.M32, mat.M42);
+					return new Vector4(mat.M21, mat.M22, mat.M23, mat.M24);
 				}
 				case 2:
 				{
-					return new Vector4(mat.M13, mat.M23, mat.M33, mat.M43);
+					return new Vector4(mat.M31, mat.M32, mat.M33, mat.M34);
 				}
 				case 3:
 				{
-					return new Vector4(mat.M14, mat.M24, mat.M34, mat.M44);
+					return new Vector4(mat.M41, mat.M42, mat.M43, mat.M44);
 				}
 				default:
 					throw new System.Exception("column num is out of bounds");
@@ -170,12 +170,14 @@ textureObj.wrapMode == TextureWrapMode.Clamp && root.Samplers[i].WrapS == GLTFSe
 			return new Vector3(vec3.X, vec3.Y, vec3.Z);
 		}
 
-		public static Vector3[] ToUnityVector3(this GLTF.Math.Vector3[] inVecArr)
+		public static Vector3[] ToUnityVector3(this GLTF.Math.Vector3[] inVecArr, bool switchHandedness=false)
 		{
 			Vector3[] outVecArr = new Vector3[inVecArr.Length];
 			for (int i = 0; i < inVecArr.Length; ++i)
 			{
 				outVecArr[i] = inVecArr[i].ToUnityVector3();
+				if (switchHandedness)
+					outVecArr[i] = outVecArr[i].switchHandedness();
 			}
 			return outVecArr;
 		}
@@ -190,12 +192,14 @@ textureObj.wrapMode == TextureWrapMode.Clamp && root.Samplers[i].WrapS == GLTFSe
 			return new Vector4(vec4.X, vec4.Y, vec4.Z, vec4.W);
 		}
 
-		public static Vector4[] ToUnityVector4(this GLTF.Math.Vector4[] inVecArr)
+		public static Vector4[] ToUnityVector4(this GLTF.Math.Vector4[] inVecArr, bool switchHandedness = false)
 		{
 			Vector4[] outVecArr = new Vector4[inVecArr.Length];
 			for (int i = 0; i < inVecArr.Length; ++i)
 			{
 				outVecArr[i] = inVecArr[i].ToUnityVector4();
+				if (switchHandedness)
+					outVecArr[i] = outVecArr[i].switchHandedness();
 			}
 			return outVecArr;
 		}

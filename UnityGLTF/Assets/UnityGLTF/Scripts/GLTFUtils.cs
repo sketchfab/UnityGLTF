@@ -5,6 +5,9 @@ using System.IO;
 using System.Text.RegularExpressions;
 using Ionic.Zip;
 using System;
+using UnityGLTF.Extensions;
+using System.Reflection;
+using CurveExtended;
 
 public class GLTFUtils
 {
@@ -55,7 +58,7 @@ public class GLTFUtils
 
 	public static string getPathAbsoluteFromProject(string projectPath)
 	{
-		return unifyPathSeparator(projectPath.Replace("Assets/", Application.dataPath));
+		return unifyPathSeparator(projectPath.Replace("Assets", Application.dataPath));
 	}
 
 	public static Regex rgx = new Regex("[^a-zA-Z0-9 \" \\ -_.]");
@@ -284,43 +287,368 @@ public class GLTFUtils
 			return SmoothnessMapChannel.SpecularMetallicAlpha;
 	}
 
-		public static void SetMaterialKeywords(Material material, WorkflowMode workflowMode)
+	public static void SetMaterialKeywords(Material material, WorkflowMode workflowMode)
+	{
+		// Note: keywords must be based on Material value not on MaterialProperty due to multi-edit & material animation
+		// (MaterialProperty value might come from renderer material property block)
+		SetKeyword(material, "_NORMALMAP", material.GetTexture("_BumpMap") || material.GetTexture("_DetailNormalMap"));
+		if (workflowMode == WorkflowMode.Specular)
+			SetKeyword(material, "_SPECGLOSSMAP", material.GetTexture("_SpecGlossMap"));
+		else if (workflowMode == WorkflowMode.Metallic)
+			SetKeyword(material, "_METALLICGLOSSMAP", material.GetTexture("_MetallicGlossMap"));
+		SetKeyword(material, "_PARALLAXMAP", material.GetTexture("_ParallaxMap"));
+		SetKeyword(material, "_DETAIL_MULX2", material.GetTexture("_DetailAlbedoMap") || material.GetTexture("_DetailNormalMap"));
+
+		// A material's GI flag internally keeps track of whether emission is enabled at all, it's enabled but has no effect
+		// or is enabled and may be modified at runtime. This state depends on the values of the current flag and emissive color.
+		// The fixup routine makes sure that the material is in the correct state if/when changes are made to the mode or color.
+		MaterialEditor.FixupEmissiveFlag(material);
+		//bool shouldEmissionBeEnabled = (material.globalIlluminationFlags & MaterialGlobalIlluminationFlags.EmissiveIsBlack) == 0;
+		SetKeyword(material, "_EMISSION", material.GetTexture("_EmissionMap"));
+
+		if (material.HasProperty("_SmoothnessTextureChannel"))
 		{
-			// Note: keywords must be based on Material value not on MaterialProperty due to multi-edit & material animation
-			// (MaterialProperty value might come from renderer material property block)
-			SetKeyword(material, "_NORMALMAP", material.GetTexture("_BumpMap") || material.GetTexture("_DetailNormalMap"));
-			if (workflowMode == WorkflowMode.Specular)
-				SetKeyword(material, "_SPECGLOSSMAP", material.GetTexture("_SpecGlossMap"));
-			else if (workflowMode == WorkflowMode.Metallic)
-				SetKeyword(material, "_METALLICGLOSSMAP", material.GetTexture("_MetallicGlossMap"));
-			SetKeyword(material, "_PARALLAXMAP", material.GetTexture("_ParallaxMap"));
-			SetKeyword(material, "_DETAIL_MULX2", material.GetTexture("_DetailAlbedoMap") || material.GetTexture("_DetailNormalMap"));
+			SetKeyword(material, "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A", GetSmoothnessMapChannel(material) == SmoothnessMapChannel.AlbedoAlpha);
+		}
+	}
 
-			// A material's GI flag internally keeps track of whether emission is enabled at all, it's enabled but has no effect
-			// or is enabled and may be modified at runtime. This state depends on the values of the current flag and emissive color.
-			// The fixup routine makes sure that the material is in the correct state if/when changes are made to the mode or color.
-			MaterialEditor.FixupEmissiveFlag(material);
-			//bool shouldEmissionBeEnabled = (material.globalIlluminationFlags & MaterialGlobalIlluminationFlags.EmissiveIsBlack) == 0;
-			SetKeyword(material, "_EMISSION", material.GetTexture("_EmissionMap"));
+	public static void MaterialChanged(Material material, WorkflowMode workflowMode)
+	{
+		SetupMaterialWithBlendMode(material, (BlendMode)material.GetFloat("_Mode"));
 
-			if (material.HasProperty("_SmoothnessTextureChannel"))
+		SetMaterialKeywords(material, workflowMode);
+	}
+
+	public static void SetKeyword(Material m, string keyword, bool state)
+	{
+		if (state)
+			m.EnableKeyword(keyword);
+		else
+			m.DisableKeyword(keyword);
+	}
+
+	public static AnimationCurve[] createCurvesFromArrays(float[] times, Vector3[] keyframes, bool isStepInterpolation = false, bool switchHandedness=false)
+	{
+		AnimationCurve[] curves = new AnimationCurve[3];
+		curves[0] = new AnimationCurve();
+		curves[1] = new AnimationCurve();
+		curves[2] = new AnimationCurve();
+
+		int nbKeys = Mathf.Min(times.Length, keyframes.Length);
+		for (int i = 0; i < nbKeys; ++i)
+		{
+			Vector3 value = keyframes[i];
+
+			if (switchHandedness)
+				value = value.switchHandedness();
+
+			curves[0].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.x, CurveExtension.TangentMode.Linear));
+			curves[1].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.y, CurveExtension.TangentMode.Linear));
+			curves[2].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.z, CurveExtension.TangentMode.Linear));
+		}
+
+		return curves;
+	}
+
+	public static AnimationCurve[] createCurvesFromArrays(float[] times, Vector4[] keyframes, bool isStepInterpolation = false)
+	{
+		AnimationCurve[] curves = new AnimationCurve[4];
+		curves[0] = new AnimationCurve();
+		curves[1] = new AnimationCurve();
+		curves[2] = new AnimationCurve();
+		curves[3] = new AnimationCurve();
+
+		int nbKeys = Mathf.Min(times.Length, keyframes.Length);
+		for (int i = 0; i < nbKeys; ++i)
+		{
+			Vector4 value = keyframes[i].switchHandedness();
+			curves[0].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.x, CurveExtension.TangentMode.Linear));
+			curves[1].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.y, CurveExtension.TangentMode.Linear));
+			curves[2].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.z, CurveExtension.TangentMode.Linear));
+			curves[3].AddKey(CurveExtension.KeyframeUtil.GetNew(times[i], value.w, CurveExtension.TangentMode.Linear));
+		}
+
+		return curves;
+	}
+
+	public static string buildBlendShapeName(int meshIndex, int targetIndex)
+	{
+		return "Target_" + meshIndex + "_" + targetIndex;
+	}
+
+	public static AnimationCurve[] buildMorphAnimationCurves(float[] times, float[] values, int nbTargets, bool isStepInterpolation=false)
+	{
+		AnimationCurve[] curves = new AnimationCurve[nbTargets];
+		for (int i = 0; i < nbTargets; ++i)
+		{
+			curves[i] = new AnimationCurve();
+		}
+		for (int t=0; t < times.Length; ++t)
+		{
+			for(int i =0; i< nbTargets; ++i)
 			{
-				SetKeyword(material, "_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A", GetSmoothnessMapChannel(material) == SmoothnessMapChannel.AlbedoAlpha);
+				curves[i].AddKey(CurveExtension.KeyframeUtil.GetNew(times[t], values[t * nbTargets + i], CurveExtension.TangentMode.Linear));
 			}
 		}
 
-		public static void MaterialChanged(Material material, WorkflowMode workflowMode)
-		{
-			SetupMaterialWithBlendMode(material, (BlendMode)material.GetFloat("_Mode"));
+		return curves;
+	}
 
-			SetMaterialKeywords(material, workflowMode);
+	public static void addMorphAnimationCurvesToClip(AnimationCurve[] curves, string targetPath, string[] morphTargetNames, ref AnimationClip clip)
+	{
+		// We expect all curves to have the same length here (glTF provides a weight for all targets at each time)
+		if(curves[0].keys.Length > 0)
+		{
+			for (int c=0; c < curves.Length; ++c)
+			{
+				CurveExtension.UpdateAllLinearTangents(curves[c]);
+				clip.SetCurve(targetPath, typeof(SkinnedMeshRenderer), "blendShape."+	morphTargetNames[c], curves[c]);
+			}
+		}
+	}
+
+	public static void addTranslationCurvesToClip(AnimationCurve[] translationCurves, string targetPath, ref AnimationClip clip)
+	{
+		if (translationCurves[0].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(translationCurves[0]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalPosition.x", translationCurves[0]);
 		}
 
-		public static void SetKeyword(Material m, string keyword, bool state)
-		{
-			if (state)
-				m.EnableKeyword(keyword);
-			else
-				m.DisableKeyword(keyword);
+		if (translationCurves[1].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(translationCurves[1]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalPosition.y", translationCurves[1]);
 		}
+
+		if (translationCurves[2].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(translationCurves[2]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalPosition.z", translationCurves[2]);
+		}
+	}
+
+	public static float framerate = 10;
+	public static void addRotationCurvesToClip(AnimationCurve[] rotationCurves, string targetPath, ref AnimationClip clip)
+	{
+		// Quaternions keyframes: all curves are expected to have the same number of keys.
+		if (rotationCurves[0].keys.Length > 1){
+
+			//FIXME?
+			// Rotation curves need to be resampled to avoid having weird tangents/interpolation
+			// in unity. The issue is not clear yet, but curves go crazy between two keyframe (with same or very
+			// close values) when the time difference is more than a certain threshold.
+			// It appears to be a Quaternion->Euler->Quaternion conversion related issue (according to forum posts)
+			// The only solution for now is to sample curves with a rate that prevent tangents for going crazy.
+			CurveExtension.resampleRotationCurves(rotationCurves, framerate);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalRotation.x", rotationCurves[0]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalRotation.y", rotationCurves[1]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalRotation.z", rotationCurves[2]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalRotation.w", rotationCurves[3]);
+		}
+	}
+
+	public static void addScaleCurvesToClip(AnimationCurve[] scaleCurves, string targetPath, ref AnimationClip clip)
+	{
+		if (scaleCurves[0].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(scaleCurves[0]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalScale.x", scaleCurves[0]);
+		}
+
+		if (scaleCurves[1].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(scaleCurves[1]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalScale.y", scaleCurves[1]);
+		}
+
+		if (scaleCurves[2].keys.Length > 1){
+			CurveExtension.UpdateAllLinearTangents(scaleCurves[2]);
+			clip.SetCurve(targetPath, typeof(Transform), "m_LocalScale.z", scaleCurves[2]);
+		}
+	}
+
+	public static float[] Vector4ToArray(Vector4 vector)
+	{
+		float[] arr = new float[4];
+		arr[0] = vector.x;
+		arr[1] = vector.y;
+		arr[2] = vector.z;
+		arr[3] = vector.w;
+
+		return arr;
+	}
+
+	public static float[] normalizeBoneWeights(Vector4 weights)
+	{
+		float sum = weights.x + weights.y + weights.z + weights.w;
+		if (sum != 1.0f)
+		{
+			weights = weights / sum;
+		}
+
+		return Vector4ToArray(weights);
+	}
+}
+
+namespace CurveExtended
+{
+	public static class CurveExtension
+	{
+		public static void resampleRotationCurves(AnimationCurve[] curves, float framerate)
+		{
+			if (curves.Length != 4)
+			{
+				Debug.Log("Invalid rotation curves. Aborting");
+				return;
+			}
+
+			// Here we assume all curves have the same number of keyframes, at the same times (since they
+			// are quaternion keyframes)
+			float start = curves[0].keys[0].time;
+			float end = curves[0].keys[curves[0].keys.Length - 1].time;
+			float deltatime = 1.0f / framerate;
+
+			for(float t = start; t < end; t+=deltatime)
+			{
+				curves[0].AddKey(new Keyframe(t, curves[0].Evaluate(t)));
+				curves[1].AddKey(new Keyframe(t, curves[1].Evaluate(t)));
+				curves[2].AddKey(new Keyframe(t, curves[2].Evaluate(t)));
+				curves[3].AddKey(new Keyframe(t, curves[3].Evaluate(t)));
+			}
+		}
+		public static void UpdateAllLinearTangents(this AnimationCurve curve)
+		{
+			for (int i = 0; i < curve.keys.Length; i++)
+			{
+				UpdateTangentsFromMode(curve, i);
+			}
+		}
+
+		// UnityEditor.CurveUtility.cs (c) Unity Technologies
+		public static void UpdateTangentsFromMode(AnimationCurve curve, int index)
+		{
+			if (index < 0 || index >= curve.length)
+				return;
+			Keyframe key = curve[index];
+			if (KeyframeUtil.GetKeyTangentMode(key, 0) == TangentMode.Linear && index >= 1)
+			{
+				key.inTangent = CalculateLinearTangent(curve, index, index - 1);
+				curve.MoveKey(index, key);
+			}
+			if (KeyframeUtil.GetKeyTangentMode(key, 1) == TangentMode.Linear && index + 1 < curve.length)
+			{
+				key.outTangent = CalculateLinearTangent(curve, index, index + 1);
+				curve.MoveKey(index, key);
+			}
+			if (KeyframeUtil.GetKeyTangentMode(key, 0) != TangentMode.Smooth && KeyframeUtil.GetKeyTangentMode(key, 1) != TangentMode.Smooth)
+				return;
+			curve.SmoothTangents(index, 0.0f);
+		}
+
+		// UnityEditor.CurveUtility.cs (c) Unity Technologies
+		private static float CalculateLinearTangent(AnimationCurve curve, int index, int toIndex)
+		{
+			return (float)(((double)curve[index].value - (double)curve[toIndex].value) / ((double)curve[index].time - (double)curve[toIndex].time));
+		}
+
+		public enum TangentMode
+		{
+			Editable = 0,
+			Smooth = 1,
+			Linear = 2,
+			Stepped = Linear | Smooth,
+		}
+
+		public enum TangentDirection
+		{
+			Left,
+			Right
+		}
+
+
+		public class KeyframeUtil
+		{
+
+			public static Keyframe GetNew(float time, float value, TangentMode leftAndRight)
+			{
+				return GetNew(time, value, leftAndRight, leftAndRight);
+			}
+
+			public static Keyframe GetNew(float time, float value, TangentMode left, TangentMode right)
+			{
+				object boxed = new Keyframe(time, value); // cant use struct in reflection
+
+				SetKeyBroken(boxed, true);
+				SetKeyTangentMode(boxed, 0, left);
+				SetKeyTangentMode(boxed, 1, right);
+
+				Keyframe keyframe = (Keyframe)boxed;
+				if (left == TangentMode.Stepped)
+					keyframe.inTangent = float.PositiveInfinity;
+				if (right == TangentMode.Stepped)
+					keyframe.outTangent = float.PositiveInfinity;
+
+				return keyframe;
+			}
+
+
+			// UnityEditor.CurveUtility.cs (c) Unity Technologies
+			public static void SetKeyTangentMode(object keyframe, int leftRight, TangentMode mode)
+			{
+
+				Type t = typeof(UnityEngine.Keyframe);
+				FieldInfo field = t.GetField("m_TangentMode", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+				int tangentMode = (int)field.GetValue(keyframe);
+
+				if (leftRight == 0)
+				{
+					tangentMode &= -7;
+					tangentMode |= (int)mode << 1;
+				}
+				else
+				{
+					tangentMode &= -25;
+					tangentMode |= (int)mode << 3;
+				}
+
+				field.SetValue(keyframe, tangentMode);
+				if (GetKeyTangentMode(tangentMode, leftRight) == mode)
+					return;
+				Debug.Log("bug");
+			}
+
+			// UnityEditor.CurveUtility.cs (c) Unity Technologies
+			public static TangentMode GetKeyTangentMode(int tangentMode, int leftRight)
+			{
+				if (leftRight == 0)
+					return (TangentMode)((tangentMode & 6) >> 1);
+				else
+					return (TangentMode)((tangentMode & 24) >> 3);
+			}
+
+			// UnityEditor.CurveUtility.cs (c) Unity Technologies
+			public static TangentMode GetKeyTangentMode(Keyframe keyframe, int leftRight)
+			{
+				Type t = typeof(UnityEngine.Keyframe);
+				FieldInfo field = t.GetField("m_TangentMode", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+				int tangentMode = (int)field.GetValue(keyframe);
+				if (leftRight == 0)
+					return (TangentMode)((tangentMode & 6) >> 1);
+				else
+					return (TangentMode)((tangentMode & 24) >> 3);
+			}
+
+
+			// UnityEditor.CurveUtility.cs (c) Unity Technologies
+			public static void SetKeyBroken(object keyframe, bool broken)
+			{
+				Type t = typeof(UnityEngine.Keyframe);
+				FieldInfo field = t.GetField("m_TangentMode", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+				int tangentMode = (int)field.GetValue(keyframe);
+
+				if (broken)
+					tangentMode |= 1;
+				else
+					tangentMode &= -2;
+				field.SetValue(keyframe, tangentMode);
+			}
+
+		}
+	}
 }
