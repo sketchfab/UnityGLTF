@@ -35,6 +35,7 @@ namespace UnityGLTF
 		protected Dictionary<MaterialType, Shader> _shaderCache = new Dictionary<MaterialType, Shader>();
 		AssetManager _assetManager = null;
 		private int _nbParsedNodes;
+		private GameObject _sceneObject;
 
 		protected AssetCache _assetCache;
 
@@ -54,6 +55,8 @@ namespace UnityGLTF
 		public delegate void RefreshWindow();
 		private RefreshWindow _refreshMethod;
 		private List<string> _assetsToRemove;
+		Dictionary<int, GameObject> _importedObjects;
+		Dictionary<int, List<SkinnedMeshRenderer>>_skinIndexToGameObjects;
 
 		public enum MaterialType
 		{
@@ -91,6 +94,8 @@ namespace UnityGLTF
 		public void Initialize()
 		{
 			_importedFiles = new List<string>();
+			_importedObjects = new Dictionary<int, GameObject>();
+			_skinIndexToGameObjects = new Dictionary<int, List<SkinnedMeshRenderer>>();
 			_isDone = true;
 			_taskManager = new TaskManager();
 			_assetsToRemove = new List<string>();
@@ -114,6 +119,8 @@ namespace UnityGLTF
 			_currentSampleName = modelName;
 			_projectDirectoryPath = importPath;
 			_assetManager = new AssetManager(_projectDirectoryPath);
+			_importedObjects.Clear();
+			_skinIndexToGameObjects.Clear();
 		}
 
 		/// <summary>
@@ -175,6 +182,7 @@ namespace UnityGLTF
 					else
 					{
 						_isDone = true;
+						finishImport();
 						_assetManager.softClean();
 						_assetManager.addModelToScene();
 					}
@@ -298,6 +306,12 @@ namespace UnityGLTF
 				LoadMaterialsEnum();
 			LoadMeshesEnum();
 			LoadSceneEnum();
+
+			if (_root.Animations != null && _root.Animations.Count > 0)
+				LoadAnimationsEnum();
+
+			if (_root.Skins != null && _root.Skins.Count > 0)
+				LoadSkinsEnum();
 		}
 
 		private void LoadBuffersEnum()
@@ -324,9 +338,19 @@ namespace UnityGLTF
 		{
 			_taskManager.addTask(LoadMeshes());
 		}
-			private void LoadSceneEnum()
+
+		private void LoadSceneEnum()
 		{
 			_taskManager.addTask(LoadScene());
+		}
+		private void LoadAnimationsEnum()
+		{
+			_taskManager.addTask(LoadAnimations());
+		}
+
+		private void LoadSkinsEnum()
+		{
+			_taskManager.addTask(LoadSkins());
 		}
 
 		private IEnumerator LoadBuffers()
@@ -368,6 +392,7 @@ namespace UnityGLTF
 
 		private GameObject createGameObject(string name)
 		{
+			name = GLTFUtils.cleanNonAlphanumeric(name);
 			return _assetManager.createGameObject(name);
 		}
 
@@ -885,9 +910,82 @@ namespace UnityGLTF
 					: MeshPrimitive.GenerateTriangles(vertexCount),
 
 				tangents = primitive.Attributes.ContainsKey(SemanticProperties.TANGENT)
-					? meshAttributes[SemanticProperties.TANGENT].AccessorContent.AsTangents.ToUnityVector4()
+					? meshAttributes[SemanticProperties.TANGENT].AccessorContent.AsTangents.ToUnityVector4(true)
 					: null
 			};
+
+			if (primitive.Attributes.ContainsKey(SemanticProperties.JOINT) && primitive.Attributes.ContainsKey(SemanticProperties.WEIGHT))
+			{
+				Vector4[] bones = new Vector4[1];
+				Vector4[] weights = new Vector4[1];
+
+				LoadSkinnedMeshAttributes(meshID, primitiveIndex, ref bones, ref weights);
+				if(bones.Length != mesh.vertices.Length || weights.Length != mesh.vertices.Length)
+				{
+					Debug.LogError("Not enough skinning data (bones:" + bones.Length + " weights:" + weights.Length + "  verts:" + mesh.vertices.Length + ")");
+					return;
+				}
+
+				BoneWeight[] bws = new BoneWeight[mesh.vertices.Length];
+				int maxBonesIndex = 0;
+				for (int i = 0; i < bws.Length; ++i)
+				{
+					// Unity seems expects the the sum of weights to be 1.
+					float[] normalizedWeights =  GLTFUtils.normalizeBoneWeights(weights[i]);
+
+					bws[i].boneIndex0 = (int)bones[i].x;
+					bws[i].weight0 = normalizedWeights[0];
+
+					bws[i].boneIndex1 = (int)bones[i].y;
+					bws[i].weight1 = normalizedWeights[1];
+
+					bws[i].boneIndex2 = (int)bones[i].z;
+					bws[i].weight2 = normalizedWeights[2];
+
+					bws[i].boneIndex3 = (int)bones[i].w;
+					bws[i].weight3 = normalizedWeights[3];
+
+					maxBonesIndex = (int)Mathf.Max(maxBonesIndex, bones[i].x, bones[i].y, bones[i].z, bones[i].w);
+				}
+
+				mesh.boneWeights = bws;
+
+				// initialize inverseBindMatrix array with identity matrix in order to output a valid mesh object
+				Matrix4x4[] bindposes = new Matrix4x4[maxBonesIndex];
+				for(int j=0; j < maxBonesIndex; ++j)
+				{
+					bindposes[j] = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, Vector3.one);
+				}
+				mesh.bindposes = bindposes;
+			}
+
+			if(primitive.Targets != null && primitive.Targets.Count > 0)
+			{
+				for (int b = 0; b < primitive.Targets.Count; ++b)
+				{
+					Vector3[] deltaVertices = new Vector3[primitive.Targets[b]["POSITION"].Value.Count];
+					Vector3[] deltaNormals = new Vector3[primitive.Targets[b]["POSITION"].Value.Count];
+					Vector3[] deltaTangents = new Vector3[primitive.Targets[b]["POSITION"].Value.Count];
+
+					if(primitive.Targets[b].ContainsKey("POSITION"))
+					{
+						NumericArray num = new NumericArray();
+						deltaVertices = primitive.Targets[b]["POSITION"].Value.AsVector3Array(ref num, _assetCache.BufferCache[0], false).ToUnityVector3(true);
+					}
+					if (primitive.Targets[b].ContainsKey("NORMAL"))
+					{
+						NumericArray num = new NumericArray();
+						deltaNormals = primitive.Targets[b]["NORMAL"].Value.AsVector3Array(ref num, _assetCache.BufferCache[0], true).ToUnityVector3(true);
+					}
+					//if (primitive.Targets[b].ContainsKey("TANGENT"))
+					//{
+					//	deltaTangents = primitive.Targets[b]["TANGENT"].Value.AsVector3Array(ref num, _assetCache.BufferCache[0], true).ToUnityVector3(true);
+					//}
+
+					mesh.AddBlendShapeFrame(GLTFUtils.buildBlendShapeName(meshID, b), 1.0f, deltaVertices, deltaNormals, deltaTangents);
+				}
+			}
+
 			mesh.RecalculateBounds();
 			mesh.RecalculateTangents();
 			mesh = _assetManager.saveMesh(mesh, meshName + "_" + meshID + "_" + primitiveIndex);
@@ -944,29 +1042,219 @@ namespace UnityGLTF
 				throw new Exception("No default scene in gltf file.");
 			}
 
-			var sceneObj = createGameObject(_currentSampleName.Length > 0 ? _currentSampleName : "GLTFScene");
+			_sceneObject = createGameObject(_currentSampleName.Length > 0 ? _currentSampleName : "GLTFScene");
 			foreach (var node in scene.Nodes)
 			{
-				var nodeObj = CreateNode(node.Value);
-				nodeObj.transform.SetParent(sceneObj.transform, false);
+				var nodeObj = CreateNode(node.Value, node.Id);
+				nodeObj.transform.SetParent(_sceneObject.transform, false);
 			}
 
-			_assetManager.savePrefab(sceneObj, _projectDirectoryPath);
+			yield return null;
+		}
+
+		private IEnumerator LoadAnimations()
+		{
+			setStatus("Loading animations ...");
+			AnimationClip clip = new AnimationClip();
+			clip.wrapMode = UnityEngine.WrapMode.Loop;
+			for (int i = 0; i < _root.Animations.Count; ++i)
+			{
+				// TMEPORARY to support samples
+				LoadAnimation(_root.Animations[i], i, clip);
+				setStatus("Loaded animation " + (i + 1) + "/" + _root.Animations.Count, i != 0);
+				yield return null;
+			}
+
+			_assetManager.saveAnimationClip(clip);
+		}
+
+		private void LoadAnimation(GLTF.Schema.Animation gltfAnimation, int index, AnimationClip clip)
+		{
+			//AnimationClip clip = new AnimationClip();
+			clip.name = gltfAnimation.Name != null && gltfAnimation.Name.Length > 0 ? gltfAnimation.Name : "GLTFAnimation_" + index;
+			for(int i=0; i < gltfAnimation.Channels.Count; ++i)
+			{
+				AnimationChannel channel = gltfAnimation.Channels[i];
+				addGLTFChannelDataToClip(gltfAnimation.Channels[i], clip);
+			}
+
+			clip.EnsureQuaternionContinuity();
+		}
+
+		private void addGLTFChannelDataToClip(GLTF.Schema.AnimationChannel channel, AnimationClip clip)
+		{
+			int animatedNodeIndex = channel.Target.Node.Id;
+			if (!_importedObjects.ContainsKey(animatedNodeIndex))
+			{
+				Debug.Log("Node '" + animatedNodeIndex + "' found for animation, aborting.");
+			}
+
+			Transform animatedNode = _importedObjects[animatedNodeIndex].transform;
+			string nodePath = AnimationUtility.CalculateTransformPath(animatedNode, _sceneObject.transform);
+
+			bool isStepInterpolation = channel.Sampler.Value.Interpolation != InterpolationType.LINEAR;
+
+			byte[] timeBufferData = _assetCache.BufferCache[channel.Sampler.Value.Output.Value.BufferView.Value.Buffer.Id];
+			float[] times = GLTFHelpers.ParseKeyframeTimes(channel.Sampler.Value.Input.Value, timeBufferData);
+
+			if (channel.Target.Path == GLTFAnimationChannelPath.translation || channel.Target.Path == GLTFAnimationChannelPath.scale)
+			{
+				byte[] bufferData = _assetCache.BufferCache[channel.Sampler.Value.Output.Value.BufferView.Value.Buffer.Id];
+				GLTF.Math.Vector3[] keyValues = GLTFHelpers.ParseVector3Keyframes(channel.Sampler.Value.Output.Value, bufferData);
+				if (keyValues == null)
+					return;
+
+				Vector3[] values = keyValues.ToUnityVector3();
+				AnimationCurve[] vector3Curves = GLTFUtils.createCurvesFromArrays(times, values, isStepInterpolation, channel.Target.Path == GLTFAnimationChannelPath.translation);
+
+				if (channel.Target.Path == GLTFAnimationChannelPath.translation)
+					GLTFUtils.addTranslationCurvesToClip(vector3Curves, nodePath, ref clip);
+				else
+					GLTFUtils.addScaleCurvesToClip(vector3Curves, nodePath, ref clip);
+			}
+			else if (channel.Target.Path == GLTFAnimationChannelPath.rotation)
+			{
+				byte[] bufferData = _assetCache.BufferCache[channel.Sampler.Value.Output.Value.BufferView.Value.Buffer.Id];
+				Vector4[] values = GLTFHelpers.ParseRotationKeyframes(channel.Sampler.Value.Output.Value, bufferData).ToUnityVector4();
+				AnimationCurve[] rotationCurves = GLTFUtils.createCurvesFromArrays(times, values, isStepInterpolation);
+
+				GLTFUtils.addRotationCurvesToClip(rotationCurves, nodePath, ref clip);
+			}
+			else if(channel.Target.Path == GLTFAnimationChannelPath.weights)
+			{
+				List<string> morphTargets = new List<string>();
+				int meshIndex = _root.Nodes[animatedNodeIndex].Mesh.Id;
+				for(int i=0; i<  _root.Meshes[meshIndex].Primitives[0].Targets.Count; ++i)
+				{
+					morphTargets.Add(GLTFUtils.buildBlendShapeName(meshIndex, i));
+				}
+
+				byte[] bufferData = _assetCache.BufferCache[channel.Sampler.Value.Output.Value.BufferView.Value.Buffer.Id];
+				float[] values = GLTFHelpers.ParseKeyframeTimes(channel.Sampler.Value.Output.Value, bufferData);
+				AnimationCurve[] morphCurves = GLTFUtils.buildMorphAnimationCurves(times, values, morphTargets.Count);
+
+				GLTFUtils.addMorphAnimationCurvesToClip(morphCurves, nodePath, morphTargets.ToArray(), ref clip);
+			}
+			else
+			{
+				Debug.Log("Unsupported animation channel target: " + channel.Target.Path);
+			}
+		}
+
+		private IEnumerator LoadSkins()
+		{
+			setStatus("Loading skins...");
+			for (int i = 0; i < _root.Skins.Count; ++i)
+			{
+				LoadSkin(_root.Skins[i], i);
+				setStatus("Loaded skin " + (i + 1) + "/" + _root.Skins.Count, i != 0);
+				yield return null;
+			}
+		}
+
+		private void LoadSkin(GLTF.Schema.Skin skin, int index)
+		{
+			// Get bones
+			Transform[] boneList = new Transform[skin.Joints.Count];
+
+			for (int i = 0; i < skin.Joints.Count; ++i)
+			{
+				boneList[i] = _importedObjects[skin.Joints[i].Id].transform;
+			}
+
+			foreach (SkinnedMeshRenderer skinMesh in _skinIndexToGameObjects[index])
+			{
+				skinMesh.bones = boneList;
+			}
+		}
+
+		private void BuildSkinnesMesh(GameObject nodeObj, GLTF.Schema.Skin skin, int meshIndex, int primitiveIndex)
+		{
+			SkinnedMeshRenderer skinMesh = nodeObj.AddComponent<SkinnedMeshRenderer>();
+
+			skinMesh.sharedMesh = _assetManager.getMesh(meshIndex, primitiveIndex);
+			skinMesh.sharedMaterial = _assetManager.getMaterial(meshIndex, primitiveIndex);
+
+			byte[] bufferData = _assetCache.BufferCache[skin.InverseBindMatrices.Value.BufferView.Value.Buffer.Id];
+			NumericArray content = new NumericArray();
+			List<Matrix4x4> bindPoseMatrices = new List<Matrix4x4>();
+			GLTF.Math.Matrix4x4[] inverseBindMatrices = skin.InverseBindMatrices.Value.AsMatrixArray(ref content, bufferData);
+			foreach (GLTF.Math.Matrix4x4 mat in inverseBindMatrices)
+			{
+				bindPoseMatrices.Add(mat.ToUnityMatrix().switchHandedness());
+			}
+
+			skinMesh.sharedMesh.bindposes = bindPoseMatrices.ToArray();
+
+			skinMesh.rootBone = skin.Skeleton == null ? _importedObjects[skin.Skeleton.Id].transform : null;
+
+			//Vector4[] boneIndexes = new Vector4[1];
+			//Vector4[] weights = new Vector4[1];
+
+			//LoadSkinnedMeshAttributes(meshIndex, primitiveIndex, ref boneIndexes, ref weights);
+			//skinMesh.sharedMesh.boneWeights = new BoneWeight[skinMesh.sharedMesh.vertices.Length];
+			//for (int i = 0; i < Mathf.Min(boneIndexes.Length, weights.Length); ++i)
+			//{
+			//	BoneWeight bw = new BoneWeight();
+
+			//	bw.boneIndex0 = (int)boneIndexes[i].x;
+			//	bw.boneIndex1 = (int)boneIndexes[i].y;
+			//	bw.boneIndex2 = (int)boneIndexes[i].z;
+			//	bw.boneIndex3 = (int)boneIndexes[i].w;
+
+			//	bw.weight0 = weights[i].x;
+			//	bw.weight1 = weights[i].y;
+			//	bw.weight2 = weights[i].z;
+			//	bw.weight3 = weights[i].w;
+			//	skinMesh.sharedMesh.boneWeights[i] = bw;
+			//}
+		}
+
+		protected virtual void LoadSkinnedMeshAttributes(int meshIndex, int primitiveIndex, ref Vector4[] boneIndexes, ref Vector4[] weights)
+		{
+			GLTF.Schema.MeshPrimitive prim = _root.Meshes[meshIndex].Primitives[primitiveIndex];
+			if (!prim.Attributes.ContainsKey(SemanticProperties.JOINT) || !prim.Attributes.ContainsKey(SemanticProperties.WEIGHT))
+				return;
+
+			parseAttribute(ref prim, SemanticProperties.JOINT, ref boneIndexes);
+			parseAttribute(ref prim, SemanticProperties.WEIGHT, ref weights);
+			foreach(Vector4 wei in weights)
+			{
+				wei.Normalize();
+			}
+		}
+
+		private void parseAttribute(ref GLTF.Schema.MeshPrimitive prim, string property, ref Vector4[] values)
+		{
+			byte[] bufferData = _assetCache.BufferCache[prim.Attributes[property].Value.BufferView.Value.Buffer.Id];
+			NumericArray num = new NumericArray();
+			GLTF.Math.Vector4[] gltfValues = prim.Attributes[property].Value.AsVector4Array(ref num, bufferData);
+			values = new Vector4[gltfValues.Length];
+
+			for (int i = 0; i < gltfValues.Length; ++i)
+			{
+				values[i] = gltfValues[i].ToUnityVector4();
+			}
+		}
+
+		private void finishImport()
+		{
+			//_assetManager.createAnimatorAsset(_sceneObject.AddComponent<Animator>());
+			_assetManager.savePrefab(_sceneObject, _projectDirectoryPath);
 
 			// Select and focus imported object
-			GameObject[] obj= new GameObject[1];
-			obj[0] = sceneObj;
+			GameObject[] obj = new GameObject[1];
+			obj[0] = _sceneObject;
 			Selection.objects = obj;
 			EditorApplication.ExecuteMenuItem("Edit/Frame Selected");
 			_messages.Clear();
 
 			setStatus("Successfully imported " + _glTFPath);
-			yield return null;
 		}
 
-    	protected virtual GameObject CreateNode(Node node)
+		protected virtual GameObject CreateNode(Node node, int index)
 		{
-			var nodeObj = createGameObject(node.Name != null && node.Name.Length > 0 ? node.Name : "GLTFNode");
+			var nodeObj = createGameObject(node.Name != null && node.Name.Length > 0 ? node.Name : "GLTFNode_" + index);
 			//nodeObj.hideFlags = HideFlags.HideInHierarchy;
 
 			_nbParsedNodes++;
@@ -980,22 +1268,57 @@ namespace UnityGLTF
 			nodeObj.transform.localRotation = rotation;
 			nodeObj.transform.localScale = scale;
 
+			bool isSkinned = node.Skin != null;
+			bool hasMorphOnly = node.Skin == null && node.Mesh != null && node.Mesh.Value.Weights != null && node.Mesh.Value.Weights.Count != 0;
 			if (node.Mesh != null)
 			{
-				// If several primitive, create several nodes and add them as child of this current Node
-				MeshFilter meshFilter = nodeObj.AddComponent<MeshFilter>();
-				meshFilter.sharedMesh = _assetManager.getMesh(node.Mesh.Id, 0);
+				if (isSkinned) // Mesh is skinned (it can also have morph)
+				{
+					if (!_skinIndexToGameObjects.ContainsKey(node.Skin.Id))
+						_skinIndexToGameObjects[node.Skin.Id] = new List<SkinnedMeshRenderer>();
 
-				MeshRenderer meshRenderer = nodeObj.AddComponent<MeshRenderer>();
-				meshRenderer.material = _assetManager.getMaterial(node.Mesh.Id, 0);
+					BuildSkinnesMesh(nodeObj, node.Skin.Value, node.Mesh.Id, 0);
+
+					_skinIndexToGameObjects[node.Skin.Id].Add(nodeObj.GetComponent<SkinnedMeshRenderer>());
+				}
+				else if (hasMorphOnly)
+				{
+					SkinnedMeshRenderer smr = nodeObj.AddComponent<SkinnedMeshRenderer>();
+					smr.sharedMesh = _assetManager.getMesh(node.Mesh.Id, 0);
+					smr.sharedMaterial = _assetManager.getMaterial(node.Mesh.Id, 0);
+				}
+				else
+				{
+					// If several primitive, create several nodes and add them as child of this current Node
+					MeshFilter meshFilter = nodeObj.AddComponent<MeshFilter>();
+					meshFilter.sharedMesh = _assetManager.getMesh(node.Mesh.Id, 0);
+
+					MeshRenderer meshRenderer = nodeObj.AddComponent<MeshRenderer>();
+					meshRenderer.material = _assetManager.getMaterial(node.Mesh.Id, 0);
+				}
 
 				for(int i = 1; i < _assetManager._parsedMeshData[node.Mesh.Id].Count; ++i)
 				{
-					GameObject go = createGameObject(node.Name ?? "GLTFNode_" + i );
-					MeshFilter mf = go.AddComponent<MeshFilter>();
-					mf.sharedMesh = _assetManager.getMesh(node.Mesh.Id, i);
-					MeshRenderer mr = go.AddComponent<MeshRenderer>();
-					mr.material = _assetManager.getMaterial(node.Mesh.Id, i);
+					GameObject go = createGameObject(node.Name ?? "GLTFNode_" + i);
+					if (isSkinned)
+					{
+						BuildSkinnesMesh(go, node.Skin.Value, node.Mesh.Id, i);
+						_skinIndexToGameObjects[node.Skin.Id].Add(go.GetComponent<SkinnedMeshRenderer>());
+					}
+					else if (hasMorphOnly)
+					{
+						SkinnedMeshRenderer smr = go.AddComponent<SkinnedMeshRenderer>();
+						smr.sharedMesh = _assetManager.getMesh(node.Mesh.Id, i);
+						smr.sharedMaterial = _assetManager.getMaterial(node.Mesh.Id, i);
+					}
+					else
+					{
+						MeshFilter mf = go.AddComponent<MeshFilter>();
+						mf.sharedMesh = _assetManager.getMesh(node.Mesh.Id, i);
+						MeshRenderer mr = go.AddComponent<MeshRenderer>();
+						mr.material = _assetManager.getMaterial(node.Mesh.Id, i);
+					}
+
 					go.transform.SetParent(nodeObj.transform, false);
 				}
 			}
@@ -1012,11 +1335,12 @@ namespace UnityGLTF
 			{
 				foreach (var child in node.Children)
 				{
-					var childObj = CreateNode(child.Value);
+					var childObj = CreateNode(child.Value, child.Id);
 					childObj.transform.SetParent(nodeObj.transform, false);
 				}
 			}
 
+			_importedObjects.Add(index, nodeObj);
 			return nodeObj;
 		}
 	}

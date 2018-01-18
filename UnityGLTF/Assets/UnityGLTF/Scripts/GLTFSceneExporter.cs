@@ -1848,9 +1848,10 @@ namespace UnityGLTF
 					AnimationSampler Tsampler = new AnimationSampler();
 					Tsampler.Input = timeAccessor;
 					Tsampler.Output = ExportAccessor(positions, true); // Vec3 for translation
-					Tchannel.Sampler = new SamplerId
+					Tchannel.Sampler = new AnimationSamplerId
 					{
 						Id = animation.Samplers.Count,
+						GLTFAnimation = animation,
 						Root = _root
 					};
 
@@ -1872,9 +1873,10 @@ namespace UnityGLTF
 					AnimationSampler Rsampler = new AnimationSampler();
 					Rsampler.Input = timeAccessor; // Float, for time
 					Rsampler.Output = ExportAccessor(rotations, true); // Vec4 for
-					Rchannel.Sampler = new SamplerId
+					Rchannel.Sampler = new AnimationSamplerId
 					{
 						Id = animation.Samplers.Count,
+						GLTFAnimation = animation,
 						Root = _root
 					};
 
@@ -1896,9 +1898,10 @@ namespace UnityGLTF
 					AnimationSampler Ssampler = new AnimationSampler();
 					Ssampler.Input = timeAccessor; // Float, for time
 					Ssampler.Output = ExportAccessor(scales); // Vec3 for scale
-					Schannel.Sampler = new SamplerId
+					Schannel.Sampler = new AnimationSamplerId
 					{
 						Id = animation.Samplers.Count,
+						GLTFAnimation = animation,
 						Root = _root
 					};
 
