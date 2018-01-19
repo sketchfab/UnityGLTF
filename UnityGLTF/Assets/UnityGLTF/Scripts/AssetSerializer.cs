@@ -39,8 +39,7 @@ public class AssetManager
 		_importMaterialsDirectory = Path.Combine(_importDirectory, "materials");
 		Directory.CreateDirectory(_importMaterialsDirectory);
 
-		_importAnimationDirectory = Path.Combine(_importDirectory, "animations");
-		Directory.CreateDirectory(_importAnimationDirectory);
+
 
 		_createdGameObjects = new List<GameObject>();
 		_parsedMeshData = new List<List<KeyValuePair<Mesh, Material>>>();
@@ -49,6 +48,12 @@ public class AssetManager
 		_parsedTextures = new List<Texture2D>();
 		_usedSources = new List<int>();
 		_generatedFiles = new List<string>();
+	}
+
+	private void createAnimationDirectory()
+	{
+		_importAnimationDirectory = Path.Combine(_importDirectory, "animations");
+		Directory.CreateDirectory(_importAnimationDirectory);
 	}
 
 	public void softClean()
@@ -123,9 +128,9 @@ public class AssetManager
 		return _parsedMeshData[nodeIndex][primitiveIndex].Key;
 	}
 
-	public Material getMaterial(int nodeIndex, int primitiveIndex)
+	public Material getMaterial(int meshIndex, int primitiveIndex)
 	{
-		return _parsedMeshData[nodeIndex][primitiveIndex].Value;
+		return _parsedMeshData[meshIndex][primitiveIndex].Value;
 	}
 
 	public UnityEngine.Material getMaterial(int index)
@@ -255,6 +260,11 @@ public class AssetManager
 
 	public void saveAnimationClip(AnimationClip clip)
 	{
+		if(_importAnimationDirectory == null)
+		{
+			createAnimationDirectory();
+		}
+
 		string path = GLTFUtils.getPathProjectFromAbsolute(_importAnimationDirectory);
 		AssetDatabase.CreateAsset(clip, path + "/" + clip.name + ".anim");
 		//AssetDatabase.SaveAssets();
