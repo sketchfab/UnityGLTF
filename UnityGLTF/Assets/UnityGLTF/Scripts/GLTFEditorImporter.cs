@@ -18,7 +18,7 @@ namespace UnityGLTF
 	/// </summary>
 	///
 
-	class GLTFEditorImporter
+	public class GLTFEditorImporter
 	{
 		// Public
 		public bool _useGLTFMaterial = false;
@@ -137,7 +137,7 @@ namespace UnityGLTF
 		/// <summary>
 		/// Cleans all generated files and structures
 		/// </summary>
-		/// 
+		///
 		public void softClean()
 		{
 			_messages.Clear();
@@ -290,11 +290,6 @@ namespace UnityGLTF
 				_root.Buffers != null ? _root.Buffers.Count : 0,
 				_root.Meshes != null ? _root.Meshes.Count : 0
 			);
-
-			if (_root.Textures != null && _root.Images != null && _root.Textures.Count > _root.Images.Count)
-			{
-				Debug.LogError("More textures than images");
-			}
 
 			// Load dependencies
 			LoadBuffersEnum();
@@ -689,7 +684,7 @@ namespace UnityGLTF
 				outputs.Add(AssetDatabase.LoadAssetAtPath<Texture2D>(GLTFUtils.getPathProjectFromAbsolute(occlusionPath)));
 			}
 
-			
+
 #endif
 			return outputs;
 		}

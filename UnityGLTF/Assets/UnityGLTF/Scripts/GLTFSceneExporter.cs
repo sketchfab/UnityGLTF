@@ -470,10 +470,10 @@ namespace UnityGLTF
 				aTangent = ExportAccessor(meshObj.tangents, true);
 
 			if (meshObj.uv.Length != 0)
-				aTexcoord0 = ExportAccessor(FlipY(meshObj.uv));
+				aTexcoord0 = ExportAccessor(meshObj.uv);
 
 			if (meshObj.uv2.Length != 0)
-				aTexcoord1 = ExportAccessor(FlipY(meshObj.uv2));
+				aTexcoord1 = ExportAccessor(meshObj.uv2);
 
 			if (meshObj.colors.Length != 0)
 				aColor0 = ExportAccessor(meshObj.colors);
