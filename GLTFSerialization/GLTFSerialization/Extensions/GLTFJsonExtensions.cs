@@ -51,12 +51,12 @@ namespace GLTF.Extensions
 			}
 
 			var list = new List<T>();
-			
+
 			while (reader.Read() && reader.TokenType != JsonToken.EndArray)
 			{
 				list.Add(deserializerFunc());
 
-				// deserializerFunc can advance to EndArray. We need to check for this case as well. 
+				// deserializerFunc can advance to EndArray. We need to check for this case as well.
 				if (reader.TokenType == JsonToken.EndArray)
 				{
 					break;
@@ -84,8 +84,8 @@ namespace GLTF.Extensions
 					reader = re;
 					dodo = false;
 				}
-				
-				// deserializerFunc can advance to EndArray. We need to check for this case as well. 
+
+				// deserializerFunc can advance to EndArray. We need to check for this case as well.
 				if (reader.TokenType == JsonToken.EndArray)
 				{
 					break;
@@ -109,7 +109,7 @@ namespace GLTF.Extensions
 			{
 				list.Add(deserializerFunc());
 
-				// deserializerFunc can advance to EndArray. We need to check for this case as well. 
+				// deserializerFunc can advance to EndArray. We need to check for this case as well.
 				if (reader.TokenType == JsonToken.EndArray)
 				{
 					break;
@@ -122,7 +122,7 @@ namespace GLTF.Extensions
 		public static TextureInfo DeserializeAsTexture(this JToken token, GLTFRoot root)
 		{
 			TextureInfo textureInfo = null;
-			
+
 			if (token != null)
 			{
 				JObject textureObject = token as JObject;
@@ -200,7 +200,7 @@ namespace GLTF.Extensions
 
 			return color;
 		}
-		
+
 		public static Color DeserializeAsColor(this JToken token)
 		{
 			Color color = Color.White;
