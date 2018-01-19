@@ -1,4 +1,8 @@
-﻿#if UNITY_EDITOR
+﻿/*
+ * Copyright(c) 2017-2018 Sketchfab Inc.
+ * License: https://github.com/sketchfab/UnityGLTF/blob/master/LICENSE
+ */
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 using System.Collections.Generic;
@@ -13,7 +17,7 @@ public class SketchfabExporter : EditorWindow
 	[MenuItem("Sketchfab/Publish to Sketchfab")]
 	static void Init()
 	{
-#if UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX // edit: added Platform Dependent Compilation - win or osx standalone
+#if UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_STANDALONE_LINUX
 		SketchfabExporter window = (SketchfabExporter)EditorWindow.GetWindow(typeof(SketchfabExporter));
 		window.titleContent.text = "Sketchfab";
 		window.Show();
@@ -26,7 +30,7 @@ public class SketchfabExporter : EditorWindow
 	[SerializeField]
 	Vector2 loginSize = new Vector2(603, 190);
 	[SerializeField]
-	Vector2 fullSize = new Vector2(603, 690);
+	Vector2 fullSize = new Vector2(603, 710);
 	[SerializeField]
 	Vector2 descSize = new Vector2(603, 175);
 
@@ -34,7 +38,7 @@ public class SketchfabExporter : EditorWindow
 	private string exportPath;
 	private string zipPath;
 
-	// Login 
+	// Login
 	private string user_name = "";
 	private string user_password = "";
 	const string usernameEditorKey = "UnityExporter_username";
@@ -51,10 +55,6 @@ public class SketchfabExporter : EditorWindow
 
 	// Exporter UI: dynamic elements
 	private string status = "";
-
-	// Disabled 
-	//Dictionary<string, string> categories = new Dictionary<string, string>();
-	//List<string> categoriesNames = new List<string>();
 	Rect windowRect;
 
 	//private List<String> tagList;
@@ -113,7 +113,6 @@ public class SketchfabExporter : EditorWindow
 
 	void OnCheckVersionSuccess()
 	{
-		Debug.Log("Latest version is " + _api.getLatestVersion());
 		if(!_api.isLatestVersion())
 		{
 			SketchfabPlugin.DisplayVersionPopup();
@@ -138,6 +137,7 @@ public class SketchfabExporter : EditorWindow
 	void OnAuthenticationSuccess()
 	{
 		_api.requestUserAccountInfo();
+		resizeWindow(fullSize);
 	}
 
 	void OnCheckUserAccountSuccess()
@@ -181,7 +181,6 @@ public class SketchfabExporter : EditorWindow
 			status = "Model name is too long";
 			return false;
 		}
-	
 
 		if (param_name.Length == 0)
 		{
@@ -310,7 +309,11 @@ public class SketchfabExporter : EditorWindow
 
 	public void displayVersionInfo()
 	{
-		if (_api.getLatestVersion().Length == 0)
+		if(_api.getLatestVersion() == null)
+		{
+			SketchfabPlugin.showVersionChecking();
+		}
+		else if (_api.getLatestVersion().Length == 0)
 		{
 			SketchfabPlugin.showVersionCheckError();
 		}
@@ -406,12 +409,6 @@ public class SketchfabExporter : EditorWindow
 		}
 		GUILayout.FlexibleSpace();
 		GUILayout.EndHorizontal();
-		//GUILayout.Space(SketchfabPlugin.SPACE_SIZE);
-
-		//if (categories.Count > 0)
-		//	categoryIndex = EditorGUILayout.Popup(categoryIndex, categoriesNames.ToArray());
-
-		//GUILayout.Space(SketchfabPlugin.SPACE_SIZE);
 	}
 
 	private void proceedToExportAndUpload()
@@ -452,7 +449,7 @@ public class SketchfabExporter : EditorWindow
 
 		GUILayout.BeginHorizontal();
 		GUILayout.FlexibleSpace();
-		
+
 		if (GUILayout.Button(SketchfabPlugin.ClickableTextColor("Create an account"), SketchfabPlugin.SkfbClickableLabel, GUILayout.Height(20)))
 		{
 			Application.OpenURL(SketchfabPlugin.Urls.createAccount);
@@ -493,9 +490,6 @@ public class SketchfabExporter : EditorWindow
 		parameters["tags"] = "unity unity3D " + param_tags;
 		parameters["private"] = param_private ? "1" : "0";
 		parameters["isPublished"] = param_autopublish ? "1" : "0";
-		//string category = categories[categoriesNames[categoryIndex]];
-		//Debug.Log(category);
-		//parameters["categories"] = category;
 		if (param_private)
 			parameters["password"] = param_password;
 

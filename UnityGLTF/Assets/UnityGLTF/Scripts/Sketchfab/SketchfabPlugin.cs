@@ -1,4 +1,8 @@
-﻿#if UNITY_EDITOR
+﻿/*
+ * Copyright(c) 2017-2018 Sketchfab Inc.
+ * License: https://github.com/sketchfab/UnityGLTF/blob/master/LICENSE
+ */
+#if UNITY_EDITOR
 using UnityEngine;
 using UnityEditor;
 
@@ -10,7 +14,7 @@ public class SketchfabPlugin
 	public struct Urls
 	{
 		public static string server = "https://sketchfab.com/";
-		public static string latestRelease = "https://github.com/sketchfab/Unity-glTF-Exporter/releases";
+		public static string latestRelease = "https://github.com/sketchfab/UnityGLTF/releases/latest";
 		public static string resetPassword = "https://sketchfab.com/login/reset-password";
 		public static string createAccount = "https://sketchfab.com/signup";
 		public static string reportAnIssue = "https://help.sketchfab.com/hc/en-us/requests/new?type=exporters&subject=Unity+Exporter";
@@ -89,7 +93,7 @@ public class SketchfabPlugin
 
 	public static void DisplayVersionPopup()
 	{
-		bool update = EditorUtility.DisplayDialog("Exporter update", "A new version is available \n(you have version " + VERSION + ")\nIt's strongly recommended that you update now. The latest version may include important bug fixes and improvements", "Update", "Skip");
+		bool update = EditorUtility.DisplayDialog("Plugin update", "A new version is available \n(you have version " + VERSION + ")\nIt's strongly recommended that you update now. The latest version may include important bug fixes and improvements", "Update", "Skip");
 		if (update)
 		{
 			Application.OpenURL(Urls.latestRelease);

@@ -1,4 +1,8 @@
-﻿#if UNITY_EDITOR
+﻿/*
+ * Copyright(c) 2017-2018 Sketchfab Inc.
+ * License: https://github.com/sketchfab/UnityGLTF/blob/master/LICENSE
+ */
+#if UNITY_EDITOR
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -67,26 +71,22 @@ class SketchfabImporter : EditorWindow
 		{
 			SketchfabPlugin.showVersionChecking();
 		}
+		else if (_api.getLatestVersion().Length == 0)
+		{
+			SketchfabPlugin.showVersionCheckError();
+		}
+		else if (_api.isLatestVersion())
+		{
+			SketchfabPlugin.showUpToDate(_api.getLatestVersion());
+		}
 		else
 		{
-			if (_api.getLatestVersion().Length == 0)
-			{
-				SketchfabPlugin.showVersionCheckError();
-			}
-			else if (_api.isLatestVersion())
-			{
-				SketchfabPlugin.showUpToDate(_api.getLatestVersion());
-			}
-			else
-			{
-				SketchfabPlugin.showOutdatedVersionWarning(_api.getLatestVersion());
-			}
+			SketchfabPlugin.showOutdatedVersionWarning(_api.getLatestVersion());
 		}
 	}
 
 	void OnCheckVersionSuccess()
 	{
-		Debug.Log("Latest version is " + _api.getLatestVersion());
 		if (!_api.isLatestVersion())
 		{
 			SketchfabPlugin.DisplayVersionPopup();
@@ -131,7 +131,7 @@ class SketchfabImporter : EditorWindow
 		// Extract archive
 		ZipFile zipfile = ZipFile.Read(zipPath);
 		zipfile.ExtractAll(_unzipDirectory, ExtractExistingFileAction.OverwriteSilently);
-		
+
 		return findGltfFile();
 	}
 
@@ -187,7 +187,8 @@ class SketchfabImporter : EditorWindow
 			{
 				_gltfPath = DragAndDrop.paths[0];
 				string modelfileName = Path.GetFileNameWithoutExtension(_gltfPath);
-				_projectDirectory = Path.Combine(_defaultImportDirectory, modelfileName);
+				_projectDirectory = GLTFUtils.unifyPathSeparator(Path.Combine(_defaultImportDirectory, modelfileName));
+				_currentSampleName = modelfileName;
 			}
 		}
 
@@ -212,7 +213,7 @@ class SketchfabImporter : EditorWindow
 
 	private string stripProjectDirectory(string directory)
 	{
-		return directory.Replace(Application.dataPath, "[PROJECT]");
+		return directory.Replace(Application.dataPath, "Assets");
 	}
 
 	// UI FUNCTIONS
@@ -235,7 +236,8 @@ class SketchfabImporter : EditorWindow
 		{
 			_gltfPath = EditorUtility.OpenFilePanel("Choose glTF to import", Application.dataPath, "glb,gltf,zip");
 			string modelfileName = Path.GetFileNameWithoutExtension(_gltfPath);
-			_projectDirectory = Path.Combine(_defaultImportDirectory, modelfileName);
+			_projectDirectory = GLTFUtils.unifyPathSeparator(Path.Combine(_defaultImportDirectory, modelfileName));
+			_currentSampleName = modelfileName;
 		}
 		if (GUILayout.Button("Change import directory"))
 		{

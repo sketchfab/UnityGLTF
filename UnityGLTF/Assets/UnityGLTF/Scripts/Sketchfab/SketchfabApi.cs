@@ -1,4 +1,9 @@
-﻿#if UNITY_EDITOR
+﻿/*
+ * Copyright(c) 2017-2018 Sketchfab Inc.
+ * License: https://github.com/sketchfab/UnityGLTF/blob/master/LICENSE
+ */
+
+#if UNITY_EDITOR
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
@@ -245,7 +250,7 @@ namespace Sketchfab
 
 			return _userDisplayName;
 		}
-		
+
 		//void relog()
 		//{
 		//	if(publisher && publisher.getState() == ExporterState.REQUEST_CODE)
@@ -621,7 +626,6 @@ namespace Sketchfab
 			{
 				www = new WWW(url, postForm);
 			}
-			
 		}
 
 		public void requestSketchfabAPI(string url, Dictionary<string, string> parameters, byte[] data, string fileName = "")
@@ -633,7 +637,7 @@ namespace Sketchfab
 			{
 				postForm.AddField(param, parameters[param]);
 			}
-			
+
 			// Add source
 			postForm.AddField("source", uploadSource);
 
@@ -645,7 +649,7 @@ namespace Sketchfab
 
 			Dictionary<string, string> headers = postForm.headers;
 			headers["Authorization"] = "Bearer " + access_token;
-		
+
 			// Create and send request
 			www = new WWW(url, postForm.data, headers);
 		}
