@@ -27,11 +27,16 @@ namespace UnityGLTF.Extensions
 			scale = new Vector3(localScale.x, localScale.y, localScale.z);
 		}
 
-		public static void SetUnityTransform(this Node node, Transform transform)
+		public static void SetUnityTransform(this Node node, Transform transform, bool useLocal=true)
 		{
-			node.Translation = new GLTF.Math.Vector3(transform.localPosition.x, transform.localPosition.y, -transform.localPosition.z);
-			node.Rotation = new GLTF.Math.Quaternion(transform.localRotation.x, transform.localRotation.y, -transform.localRotation.z, -transform.localRotation.w);
-			node.Scale = new GLTF.Math.Vector3(transform.localScale.x, transform.localScale.y, transform.localScale.z);
+			Vector3 position = useLocal ? transform.localPosition : transform.position;
+			node.Translation = new GLTF.Math.Vector3(position.x, position.y, -position.z);
+
+			Quaternion rotation = useLocal ? transform.localRotation : transform.rotation;
+			node.Rotation = new GLTF.Math.Quaternion(rotation.x, rotation.y, -rotation.z, -rotation.w);
+
+			Vector3 scale = useLocal ? transform.localScale : transform.lossyScale;
+			node.Scale = new GLTF.Math.Vector3(scale.x, scale.y, scale.z);
 		}
 
 		// todo: move to utility class

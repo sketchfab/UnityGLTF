@@ -308,8 +308,9 @@ namespace UnityGLTF
 			{
 				_skinnedNodes.Add(nodeTransform);
 			}
-
-			node.SetUnityTransform(nodeTransform);
+			// If object is on top of the selection, use global transform
+			bool useLocal = !Array.Exists(_rootTransforms, element => element == nodeTransform);
+			node.SetUnityTransform(nodeTransform, useLocal);
 
 			var id = new NodeId {
 				Id = _root.Nodes.Count,
