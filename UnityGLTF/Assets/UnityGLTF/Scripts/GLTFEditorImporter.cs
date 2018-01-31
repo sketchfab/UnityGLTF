@@ -387,7 +387,7 @@ namespace UnityGLTF
 
 		private GameObject createGameObject(string name)
 		{
-			name = GLTFUtils.cleanNonAlphanumeric(name);
+			name = GLTFUtils.cleanName(name);
 			return _assetManager.createGameObject(name);
 		}
 

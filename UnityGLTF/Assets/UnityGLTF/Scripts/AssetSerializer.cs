@@ -186,7 +186,7 @@ public class AssetManager
 
 	public string generateName(string name, int index)
 	{
-		return GLTFUtils.cleanNonAlphanumeric(name + "_" + index);
+		return GLTFUtils.cleanName(name + "_" + index);
 	}
 
 	public void registerImageFromData(byte[] imageData, int imageID, string imageName="")
@@ -211,7 +211,7 @@ public class AssetManager
 	// File serialization
 	public Mesh saveMesh(Mesh mesh, string objectName = "Scene")
 	{
-		string baseName = GLTFUtils.cleanNonAlphanumeric(objectName + ".asset");
+		string baseName = GLTFUtils.cleanName(objectName + ".asset");
 		string fullPath = Path.Combine(_importMeshesDirectory, baseName);
 		string meshProjectPath = GLTFUtils.getPathProjectFromAbsolute(fullPath);
 
@@ -227,7 +227,7 @@ public class AssetManager
 
 	public Texture2D saveTexture(Texture2D texture, int index = -1, string imageName = "")
 	{
-		string basename = GLTFUtils.cleanNonAlphanumeric(texture.name + (index >= 0 ? "_" + index.ToString() : "") + ".png"); // Extension will be overridden
+		string basename = GLTFUtils.cleanName(texture.name + (index >= 0 ? "_" + index.ToString() : "") + ".png"); // Extension will be overridden
 		string fullPath = Path.Combine(_importTexturesDirectory, basename);
 
 		// Write texture
@@ -272,7 +272,7 @@ public class AssetManager
 
 	public void savePrefab(GameObject sceneObject, string _importDirectory)
 	{
-		string baseName = GLTFUtils.cleanNonAlphanumeric(sceneObject.name.Length > 0 ? sceneObject.name : "GlTF") + ".prefab";
+		string baseName = GLTFUtils.cleanName(sceneObject.name.Length > 0 ? sceneObject.name : "GlTF") + ".prefab";
 		string fullPath = Path.Combine(_importDirectory, baseName);
 		string prefabPathInProject = GLTFUtils.getPathProjectFromAbsolute(fullPath);
 		if (!File.Exists(fullPath))

@@ -61,12 +61,11 @@ public class GLTFUtils
 		return unifyPathSeparator(projectPath.Replace("Assets", Application.dataPath));
 	}
 
-	public static Regex rgx = new Regex("[^a-zA-Z0-9 \" \\ -_.]");
+	public static Regex rgx = new Regex("[^a-zA-Z0-9 -_.]");
 
-	static public string cleanNonAlphanumeric(string s)
+	static public string cleanName(string s)
 	{
-		s = s.Replace('\'', ' ').Replace('\"', ' ').Replace(':', ' ');
-		return rgx.Replace(s, "");
+		return rgx.Replace(s, "").Replace("/", " ").Replace("\\", " ");
 	}
 
 	static public bool isValidMeshObject(GameObject gameObject)
