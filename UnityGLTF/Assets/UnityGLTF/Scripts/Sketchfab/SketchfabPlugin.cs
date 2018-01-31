@@ -9,7 +9,7 @@ using UnityEditor;
 // Static data and assets related to the plugin
 public class SketchfabPlugin
 {
-	public static string VERSION = "0.0.8a";
+	public static string VERSION = "0.0.85a";
 
 	public struct Urls
 	{
